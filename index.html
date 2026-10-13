@@ -57,6 +57,14 @@
       background: #334155;
     }
 
+    input[type="time"] {
+      color-scheme: dark;
+    }
+    input[type="time"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.8) sepia(1) hue-rotate(140deg);
+      cursor: pointer;
+    }
+
     @keyframes pulseGlow {
       0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 12px rgba(6,182,212,0.4)); }
       50% { opacity: 1; filter: drop-shadow(0 0 24px rgba(6,182,212,0.8)); }
@@ -206,11 +214,33 @@
           <!-- Alarm Time & Label -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="alarmTime" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Time (24h or AM/PM)
-              </label>
-              <input type="time" id="alarmTime" required
-                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-mono text-base focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition">
+              <div class="flex items-center justify-between mb-1.5">
+                <label for="alarmTime" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Alarm Time
+                </label>
+                <button type="button" id="timeModeToggle" class="text-[11px] text-cyan-400 hover:text-cyan-300 underline cursor-pointer">
+                  Quick Pickers
+                </button>
+              </div>
+              <div class="relative">
+                <input type="time" id="alarmTime" required
+                  class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-mono text-base focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition cursor-pointer">
+              </div>
+
+              <!-- Quick Hour/Minute Dropdowns for fail-safe entry across all browsers -->
+              <div id="quickPickerRow" class="mt-2 grid grid-cols-3 gap-1.5 bg-slate-950/70 p-1.5 rounded-lg border border-slate-800">
+                <select id="quickHours" class="bg-slate-900 border border-slate-700 text-cyan-300 text-xs rounded-md px-1.5 py-1 font-mono focus:outline-none focus:border-cyan-400">
+                  <option value="" disabled selected>Hr</option>
+                  <!-- Populated via JS -->
+                </select>
+                <select id="quickMins" class="bg-slate-900 border border-slate-700 text-cyan-300 text-xs rounded-md px-1.5 py-1 font-mono focus:outline-none focus:border-cyan-400">
+                  <option value="" disabled selected>Min</option>
+                  <!-- Populated via JS -->
+                </select>
+                <button type="button" id="applyQuickNow" class="text-[11px] px-2 py-1 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700/50 text-cyan-200 rounded-md font-medium text-center transition">
+                  Now +5m
+                </button>
+              </div>
             </div>
 
             <div>
@@ -228,7 +258,7 @@
               Live Radio Station
             </label>
             <select id="stationSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition">
-              <option value="https://stream.live.vc.bbcmedia.co.uk/bbc_world_service">BBC World Service</option>
+              <option value="https://ice2.somafm.com/groovesalad-128-mp3">SomaFM: Groove Salad (Chill/Ambient)</option>
               <option value="https://ice2.somafm.com/dronezone-128-mp3">SomaFM: Drone Zone (Atmospheric)</option>
               <option value="https://ice2.somafm.com/secretagent-128-mp3">SomaFM: Secret Agent (Spy/Lounge)</option>
               <option value="https://ice2.somafm.com/defcon-128-mp3">SomaFM: DEF CON Radio (Electronic)</option>
@@ -343,7 +373,7 @@
 
     // Station Directory Names Lookup
     const stationNames = {
-      'https://ice2.somafm.com/groovesalad-128-mp3': 'SomaFM: Groove Salad',
+      'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service': 'BBC World Service',
       'https://ice2.somafm.com/dronezone-128-mp3': 'SomaFM: Drone Zone',
       'https://ice2.somafm.com/secretagent-128-mp3': 'SomaFM: Secret Agent',
       'https://ice2.somafm.com/defcon-128-mp3': 'SomaFM: DEF CON Radio',
@@ -928,6 +958,89 @@
         }
       });
 
+      const alarmTimeInput = document.getElementById('alarmTime');
+      const quickHours = document.getElementById('quickHours');
+      const quickMins = document.getElementById('quickMins');
+      const applyQuickNowBtn = document.getElementById('applyQuickNow');
+
+      // Populate hour options (00 to 23) with 12h readable reference
+      for (let h = 0; h < 24; h++) {
+        const val = String(h).padStart(2, '0');
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const display12 = `${h % 12 || 12} ${ampm}`;
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = `${val} (${display12})`;
+        quickHours.appendChild(opt);
+      }
+
+      // Populate minute options (00 to 55 by default in 5m steps, plus custom precision)
+      for (let m = 0; m < 60; m += 1) {
+        const val = String(m).padStart(2, '0');
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = `${val}m`;
+        quickMins.appendChild(opt);
+      }
+
+      // Default the input to next rounded 15-minute slot so it's always pre-filled and valid
+      const presetTime = new Date();
+      presetTime.setMinutes(presetTime.getMinutes() + 10);
+      const defaultHH = String(presetTime.getHours()).padStart(2, '0');
+      const defaultMM = String(presetTime.getMinutes()).padStart(2, '0');
+      alarmTimeInput.value = `${defaultHH}:${defaultMM}`;
+      quickHours.value = defaultHH;
+      quickMins.value = defaultMM;
+
+      // Ensure picker opens smoothly when tapped/clicked anywhere on the field
+      alarmTimeInput.addEventListener('click', () => {
+        if (typeof alarmTimeInput.showPicker === 'function') {
+          try {
+            alarmTimeInput.showPicker();
+          } catch (e) {
+            // Ignored if already open
+          }
+        }
+      });
+
+      // Synchronize quick dropdowns -> native time input
+      function updateTimeFromQuick() {
+        const h = quickHours.value || '07';
+        const m = quickMins.value || '00';
+        alarmTimeInput.value = `${h}:${m}`;
+      }
+
+      quickHours.addEventListener('change', updateTimeFromQuick);
+      quickMins.addEventListener('change', updateTimeFromQuick);
+
+      // Synchronize native time input -> quick dropdowns
+      alarmTimeInput.addEventListener('input', () => {
+        if (alarmTimeInput.value && alarmTimeInput.value.includes(':')) {
+          const [h, m] = alarmTimeInput.value.split(':');
+          quickHours.value = h;
+          quickMins.value = m;
+        }
+      });
+
+      // Quick "Now + 5m" shortcut helper
+      applyQuickNowBtn.addEventListener('click', () => {
+        const target = new Date();
+        target.setMinutes(target.getMinutes() + 5);
+        const hh = String(target.getHours()).padStart(2, '0');
+        const mm = String(target.getMinutes()).padStart(2, '0');
+        alarmTimeInput.value = `${hh}:${mm}`;
+        quickHours.value = hh;
+        quickMins.value = mm;
+        showToast(`Time set to ${hh}:${mm} (+5 mins from now).`);
+      });
+
+      // Toggle quick pickers display
+      const timeModeToggle = document.getElementById('timeModeToggle');
+      const quickPickerRow = document.getElementById('quickPickerRow');
+      timeModeToggle.addEventListener('click', () => {
+        quickPickerRow.classList.toggle('hidden');
+      });
+
       // Form submission
       const form = document.getElementById('alarmForm');
       form.addEventListener('submit', (e) => {
@@ -935,6 +1048,10 @@
         armAudioEngine(true);
 
         const timeVal = document.getElementById('alarmTime').value;
+        if (!timeVal) {
+          showToast('Please specify a valid time for the alarm.', 'error');
+          return;
+        }
         const labelVal = document.getElementById('alarmLabel').value.trim() || 'Radio Wakeup';
         const durationVal = parseInt(document.getElementById('playDuration').value, 10) || 60;
         const repeatVal = document.getElementById('repeatPattern').value;
@@ -970,6 +1087,15 @@
         stationSelect.value = 'https://ice2.somafm.com/groovesalad-128-mp3';
         customUrlContainer.classList.add('hidden');
         document.getElementById('playDuration').value = 60;
+
+        // Reset alarm time to default upcoming time
+        const nextTime = new Date();
+        nextTime.setMinutes(nextTime.getMinutes() + 10);
+        const nh = String(nextTime.getHours()).padStart(2, '0');
+        const nm = String(nextTime.getMinutes()).padStart(2, '0');
+        alarmTimeInput.value = `${nh}:${nm}`;
+        quickHours.value = nh;
+        quickMins.value = nm;
 
         showToast(`Alarm set for ${timeVal} (${labelVal})`);
       });
