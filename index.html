@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AeroRadio - Multi-Alarm Live Radio Clock</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Orbitron for digital clock -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            night: '#080c14',
+            surface: '#0f172a',
+            surfaceElevated: '#17223b',
+            accentCyan: '#06b6d4',
+            accentViolet: '#8b5cf6',
+            accentEmerald: '#10b981',
+          },
+          boxShadow: {
+            'glow-cyan': '0 0 25px -5px rgba(6, 182, 212, 0.4)',
+            'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.4)',
+            'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.4)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom scrollbar and subtle glowing animations */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #080c14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 12px rgba(6,182,212,0.4)); }
+      50% { opacity: 1; filter: drop-shadow(0 0 24px rgba(6,182,212,0.8)); }
+    }
+    .clock-glow {
+      animation: pulseGlow 4s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-night text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-black">
+
+  <!-- Top Navigation & Engine Status -->
+  <header class="border-b border-slate-800/80 bg-surface/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-violet-600 flex items-center justify-center shadow-glow-cyan text-white">
+          <i data-lucide="radio" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-cyan-400 bg-clip-text text-transparent">
+            AeroRadio
+          </h1>
+          <p class="text-xs text-slate-400">1-Hour Live Radio Alarm Hub</p>
+        </div>
+      </div>
+
+      <!-- Audio Engine Arming & Test Controls -->
+      <div class="flex items-center flex-wrap gap-2.5">
+        <button id="armEngineBtn" 
+          class="flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-300 bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20">
+          <span id="armPulse" class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+          <span id="armLabel">Arm Audio Engine</span>
+        </button>
+
+        <button id="testAudioBtn" 
+          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors">
+          <i data-lucide="volume-2" class="w-3.5 h-3.5 text-cyan-400"></i>
+          <span>Test Speakers</span>
+        </button>
+
+        <button id="notifyBtn" 
+          class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+          title="Enable Notifications">
+          <i data-lucide="bell" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-6xl mx-auto w-full px-4 py-8 space-y-8">
+    <!-- Big Digital Clock Nightstand View -->
+    <section class="bg-gradient-to-b from-surface to-surfaceElevated rounded-3xl p-6 sm:p-10 border border-slate-800 relative overflow-hidden shadow-2xl">
+      <!-- Background subtle radial ambient glow -->
+      <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="relative z-10 flex flex-col items-center text-center">
+        <!-- Date Display -->
+        <div id="liveDate" class="text-xs sm:text-sm font-medium tracking-widest uppercase text-cyan-400 mb-2">
+          Loading Date...
+        </div>
+
+        <!-- Time Display with JetBrains Mono font -->
+        <div class="clock-glow flex items-baseline justify-center font-mono font-bold text-white tracking-tight my-2">
+          <span id="clockHours" class="text-6xl sm:text-8xl md:text-9xl">00</span>
+          <span class="text-5xl sm:text-7xl md:text-8xl text-cyan-400/80 animate-pulse px-1">:</span>
+          <span id="clockMinutes" class="text-6xl sm:text-8xl md:text-9xl">00</span>
+          <span class="text-5xl sm:text-7xl md:text-8xl text-cyan-400/80 animate-pulse px-1">:</span>
+          <span id="clockSeconds" class="text-5xl sm:text-7xl md:text-8xl text-slate-400">00</span>
+          <span id="clockAmPm" class="text-2xl sm:text-4xl text-cyan-400 ml-3 font-sans font-semibold">AM</span>
+        </div>
+
+        <!-- Next Trigger Countdown Badge -->
+        <div class="mt-4 flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-xs sm:text-sm text-slate-300">
+          <i data-lucide="alarm-clock" class="w-4 h-4 text-cyan-400"></i>
+          <span id="nextAlarmSummary">No active alarms scheduled</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Active Triggered Alarm Banner (Hidden until triggered) -->
+    <div id="activeAlarmBanner" class="hidden relative overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-950/90 via-purple-950/90 to-surfaceElevated border-2 border-cyan-400 shadow-glow-cyan p-6 transition-all duration-500 animate-bounce-short">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div class="space-y-2">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 text-xs font-semibold border border-cyan-500/40">
+            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+            ALARM ACTIVATED (1-HOUR BROADCAST)
+          </div>
+          <h2 id="activeAlarmTitle" class="text-2xl font-bold text-white tracking-wide">Morning Awakening</h2>
+          <p id="activeStationInfo" class="text-sm text-cyan-200 flex items-center gap-2">
+            <i data-lucide="disc-3" class="w-4 h-4 animate-spin text-cyan-400"></i>
+            <span>Streaming: SomaFM Groove Salad</span>
+          </p>
+
+          <!-- Fallback Alert Box if Stream fails -->
+          <div id="fallbackNotice" class="hidden text-xs text-amber-300 bg-amber-950/50 border border-amber-600/50 rounded-lg p-2.5">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 inline mr-1"></i>
+            Radio network unreachable. Running Web Audio fallback acoustic tone alarm.
+          </div>
+        </div>
+
+        <!-- Visualizer & Count Down -->
+        <div class="flex flex-col items-center lg:items-end space-y-3">
+          <!-- Canvas Audio Visualizer -->
+          <canvas id="visualizerCanvas" width="280" height="48" class="rounded-lg bg-black/40 border border-slate-800"></canvas>
+          
+          <div class="flex items-center gap-3">
+            <div class="text-right">
+              <span class="text-xs text-slate-400">Radio auto-off in:</span>
+              <div id="radioCountdown" class="text-xl font-mono font-bold text-cyan-300">60:00</div>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-28 sm:w-36 bg-slate-800 rounded-full h-2.5 overflow-hidden">
+              <div id="alarmDurationBar" class="bg-gradient-to-r from-cyan-400 to-emerald-400 h-2.5 rounded-full transition-all duration-1000" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Controls: Snooze & Dismiss -->
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="snooze5Btn" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold border border-slate-700 transition">
+            +5m Snooze
+          </button>
+          <button id="snooze10Btn" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold border border-slate-700 transition">
+            +10m Snooze
+          </button>
+          <button id="dismissAlarmBtn" class="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold shadow-lg shadow-rose-900/50 transition">
+            Dismiss & Stop
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Alarm Management Section: Form + Saved Alarms Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- Left Column: Add / Edit Alarm Form -->
+      <section class="lg:col-span-5 bg-surface rounded-2xl border border-slate-800 p-6 shadow-xl space-y-5">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800/80">
+          <div class="flex items-center space-x-2">
+            <i data-lucide="plus-circle" class="w-5 h-5 text-cyan-400"></i>
+            <h3 class="font-bold text-slate-100 text-base">Create New Alarm</h3>
+          </div>
+          <span class="text-xs text-slate-400">Continuous 1h radio</span>
+        </div>
+
+        <form id="alarmForm" class="space-y-4">
+          <!-- Alarm Time & Label -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="alarmTime" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Time (24h or AM/PM)
+              </label>
+              <input type="time" id="alarmTime" required
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-mono text-base focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition">
+            </div>
+
+            <div>
+              <label for="alarmLabel" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Alarm Label
+              </label>
+              <input type="text" id="alarmLabel" placeholder="e.g. Work Wakeup" required
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition">
+            </div>
+          </div>
+
+          <!-- Radio Station Preset Picker -->
+          <div>
+            <label for="stationSelect" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              Live Radio Station
+            </label>
+            <select id="stationSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition">
+              <option value="https://ice2.somafm.com/groovesalad-128-mp3">SomaFM: Groove Salad (Chill/Ambient)</option>
+              <option value="https://ice2.somafm.com/dronezone-128-mp3">SomaFM: Drone Zone (Atmospheric)</option>
+              <option value="https://ice2.somafm.com/secretagent-128-mp3">SomaFM: Secret Agent (Spy/Lounge)</option>
+              <option value="https://ice2.somafm.com/defcon-128-mp3">SomaFM: DEF CON Radio (Electronic)</option>
+              <option value="https://ice2.somafm.com/indiepop-128-mp3">SomaFM: Indie Pop Rocks (Indie/Rock)</option>
+              <option value="custom">-- Custom Stream URL --</option>
+            </select>
+          </div>
+
+          <!-- Custom Stream Input (Shown when 'custom' is selected) -->
+          <div id="customUrlContainer" class="hidden">
+            <label for="customUrlInput" class="block text-xs font-semibold text-cyan-300 uppercase tracking-wider mb-1.5">
+              Custom Stream HTTPS URL
+            </label>
+            <input type="url" id="customUrlInput" placeholder="https://stream.example.com/live.mp3"
+              class="w-full bg-slate-900 border border-cyan-800 rounded-xl px-3.5 py-2.5 text-white text-xs font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition">
+          </div>
+
+          <!-- Duration & Repeat Options -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="playDuration" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Play Duration (Mins)
+              </label>
+              <input type="number" id="playDuration" min="5" max="180" value="60"
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition">
+              <span class="text-[11px] text-slate-500 mt-1 block">Default: 60 mins (1 hr uninterrupted)</span>
+            </div>
+
+            <div>
+              <label for="repeatPattern" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Repeat Frequency
+              </label>
+              <select id="repeatPattern" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition">
+                <option value="once">Once Only</option>
+                <option value="daily">Every Day</option>
+                <option value="weekdays">Weekdays (Mon - Fri)</option>
+                <option value="weekends">Weekends (Sat - Sun)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 hover:from-cyan-400 hover:to-violet-500 text-white font-semibold text-sm shadow-lg shadow-cyan-950/50 flex items-center justify-center space-x-2 transition transform active:scale-[0.99]">
+            <i data-lucide="alarm-clock-check" class="w-4 h-4"></i>
+            <span>Add Alarm to Schedule</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- Right Column: Scheduled Alarms List -->
+      <section class="lg:col-span-7 bg-surface rounded-2xl border border-slate-800 p-6 shadow-xl flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-4">
+          <div class="flex items-center space-x-2">
+            <i data-lucide="list-music" class="w-5 h-5 text-cyan-400"></i>
+            <h3 class="font-bold text-slate-100 text-base">Active Alarms</h3>
+          </div>
+          <span id="alarmCountBadge" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+            0 alarms
+          </span>
+        </div>
+
+        <!-- Alarms Container with Scroll -->
+        <div id="alarmsList" class="space-y-3 flex-1 overflow-y-auto max-h-[460px] pr-1">
+          <!-- Injected via JavaScript -->
+        </div>
+
+        <!-- Empty State UI -->
+        <div id="emptyAlarmsState" class="hidden flex-col items-center justify-center py-14 text-center text-slate-400 space-y-3">
+          <div class="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600">
+            <i data-lucide="bell-off" class="w-7 h-7"></i>
+          </div>
+          <div>
+            <p class="font-medium text-slate-300">No alarms created yet</p>
+            <p class="text-xs text-slate-500 mt-1">Configure your wake-up time and favorite radio stream on the left.</p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Floating Toast Message Box -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-3 bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl">
+    <div id="toastIcon" class="text-cyan-400">
+      <i data-lucide="info" class="w-5 h-5"></i>
+    </div>
+    <div id="toastMsg" class="text-sm font-medium">Notification message</div>
+  </div>
+
+  <script>
+    // Audio Context and Stream Controller
+    let audioCtx = null;
+    let fallbackOscillator = null;
+    let fallbackGain = null;
+    let audioElement = new Audio();
+    audioElement.crossOrigin = "anonymous";
+    audioElement.preload = "none";
+
+    // Application State
+    let alarms = [];
+    let isEngineArmed = false;
+    let activeAlarmId = null;
+    let activeAlarmTimer = null;
+    let activeAlarmSecondsRemaining = 0;
+    let activeAlarmDurationTotal = 3600;
+    let streamConnectTimeout = null;
+
+    // Canvas Visualizer
+    let analyserNode = null;
+    let audioSourceNode = null;
+    let animationFrameId = null;
+
+    // Station Directory Names Lookup
+    const stationNames = {
+      'https://ice2.somafm.com/groovesalad-128-mp3': 'SomaFM: Groove Salad',
+      'https://ice2.somafm.com/dronezone-128-mp3': 'SomaFM: Drone Zone',
+      'https://ice2.somafm.com/secretagent-128-mp3': 'SomaFM: Secret Agent',
+      'https://ice2.somafm.com/defcon-128-mp3': 'SomaFM: DEF CON Radio',
+      'https://ice2.somafm.com/indiepop-128-mp3': 'SomaFM: Indie Pop Rocks'
+    };
+
+    function initAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function armAudioEngine(silent = false) {
+      try {
+        initAudioContext();
+        // Play and immediately pause silent buffer to register explicit user activation
+        const silentBuffer = audioCtx.createBuffer(1, 1, 22050);
+        const source = audioCtx.createBufferSource();
+        source.buffer = silentBuffer;
+        source.connect(audioCtx.destination);
+        source.start(0);
+
+        isEngineArmed = true;
+        updateEngineUI(true);
+        if (!silent) showToast('Audio engine armed! Live radio will start smoothly on alarm time.', 'success');
+      } catch (err) {
+        console.error('Audio arm error:', err);
+        showToast('Could not initialize audio engine.', 'error');
+      }
+    }
+
+    function updateEngineUI(armed) {
+      const armBtn = document.getElementById('armEngineBtn');
+      const armPulse = document.getElementById('armPulse');
+      const armLabel = document.getElementById('armLabel');
+      if (armed) {
+        armBtn.className = 'flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-300 bg-emerald-500/10 border-emerald-500/30 text-emerald-400';
+        armPulse.className = 'w-2 h-2 rounded-full bg-emerald-400';
+        armLabel.textContent = 'Audio Engine Ready';
+      } else {
+        armBtn.className = 'flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-300 bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20';
+        armPulse.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+        armLabel.textContent = 'Arm Audio Engine';
+      }
+    }
+
+    function setupVisualizer() {
+      if (!audioCtx || audioSourceNode) return;
+      try {
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 64;
+        audioSourceNode = audioCtx.createMediaElementSource(audioElement);
+        audioSourceNode.connect(analyserNode);
+        analyserNode.connect(audioCtx.destination);
+      } catch (e) {
+        console.warn('Visualizer connection already made or bypassed:', e);
+      }
+    }
+
+    function startVisualizerAnimation() {
+      const canvas = document.getElementById('visualizerCanvas');
+      const ctx = canvas.getContext('2d');
+      const bufferLength = analyserNode ? analyserNode.frequencyBinCount : 32;
+      const dataArray = new Uint8Array(bufferLength);
+
+      function draw() {
+        animationFrameId = requestAnimationFrame(draw);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (analyserNode && !audioElement.paused) {
+          analyserNode.getByteFrequencyData(dataArray);
+        } else {
+          // Subtle synthetic idle waves
+          for (let i = 0; i < dataArray.length; i++) {
+            dataArray[i] = Math.sin(Date.now() / 200 + i) * 20 + 25;
+          }
+        }
+
+        const barWidth = (canvas.width / bufferLength) * 1.5;
+        let barHeight;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          barHeight = (dataArray[i] / 255) * canvas.height;
+          const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+          gradient.addColorStop(0, '#06b6d4');
+          gradient.addColorStop(1, '#8b5cf6');
+
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+          x += barWidth + 1;
+        }
+      }
+      draw();
+    }
+
+    function startFallbackTone() {
+      try {
+        initAudioContext();
+        if (fallbackOscillator) return;
+
+        // Dual pleasant chime tone pattern (A4 & E5)
+        fallbackOscillator = audioCtx.createOscillator();
+        fallbackGain = audioCtx.createGain();
+        fallbackOscillator.type = 'triangle';
+        fallbackOscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // A4
+
+        // Rhythmic pulsing gain
+        fallbackGain.gain.setValueAtTime(0.01, audioCtx.currentTime);
+        fallbackGain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 3);
+
+        fallbackOscillator.connect(fallbackGain);
+        fallbackGain.connect(audioCtx.destination);
+        fallbackOscillator.start();
+
+        // Pulsing volume
+        setInterval(() => {
+          if (fallbackGain && audioCtx) {
+            fallbackGain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            fallbackGain.gain.exponentialRampToValueAtTime(0.02, audioCtx.currentTime + 0.8);
+          }
+        }, 1000);
+
+        document.getElementById('fallbackNotice').classList.remove('hidden');
+      } catch (e) {
+        console.error('Fallback tone failed:', e);
+      }
+    }
+
+    function stopFallbackTone() {
+      if (fallbackOscillator) {
+        try {
+          fallbackOscillator.stop();
+          fallbackOscillator.disconnect();
+        } catch(e){}
+        fallbackOscillator = null;
+      }
+      document.getElementById('fallbackNotice').classList.add('hidden');
+    }
+
+    function playRadioStream(url, durationMinutes) {
+      initAudioContext();
+      setupVisualizer();
+      startVisualizerAnimation();
+
+      stopFallbackTone();
+      audioElement.pause();
+      audioElement.src = url;
+      audioElement.volume = 0.05; // Start very low for gradual 15s gentle awakening ramp
+
+      // 5-second connection watchdog: if stream doesn't trigger playing, engage Web Audio fallback
+      clearTimeout(streamConnectTimeout);
+      let streamHasStarted = false;
+
+      streamConnectTimeout = setTimeout(() => {
+        if (!streamHasStarted) {
+          console.warn('Stream failed to start in 5 seconds. Activating Web Audio acoustic chime fallback.');
+          startFallbackTone();
+        }
+      }, 5000);
+
+      const playPromise = audioElement.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          streamHasStarted = true;
+          clearTimeout(streamConnectTimeout);
+          stopFallbackTone();
+
+          // Smooth volume ramp-up over 15 seconds
+          let currentVol = 0.05;
+          const rampInterval = setInterval(() => {
+            if (audioElement.paused || currentVol >= 0.95) {
+              clearInterval(rampInterval);
+              return;
+            }
+            currentVol = Math.min(1.0, currentVol + 0.06);
+            audioElement.volume = currentVol;
+          }, 1000);
+        }).catch(err => {
+          console.error('Radio play blocked or stream error:', err);
+          startFallbackTone();
+        });
+      }
+
+      audioElement.onerror = () => {
+        console.warn('Audio tag encountered error; initiating fallback');
+        startFallbackTone();
+      };
+    }
+
+    function stopActiveAlarmRadio() {
+      clearTimeout(streamConnectTimeout);
+      stopFallbackTone();
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.src = '';
+      }
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      if (activeAlarmTimer) {
+        clearInterval(activeAlarmTimer);
+        activeAlarmTimer = null;
+      }
+      document.getElementById('activeAlarmBanner').classList.add('hidden');
+      activeAlarmId = null;
+      updateNextAlarmDisplay();
+    }
+
+    function loadAlarms() {
+      const stored = localStorage.getItem('aeroradio_alarms');
+      if (stored) {
+        try {
+          alarms = JSON.parse(stored);
+        } catch (e) {
+          alarms = [];
+        }
+      } else {
+        // Sample default alarms for first-time onboarding
+        alarms = [
+          {
+            id: 'alarm_default_1',
+            label: 'Morning Awakening',
+            time: '07:30',
+            streamUrl: 'https://ice2.somafm.com/groovesalad-128-mp3',
+            stationName: 'SomaFM: Groove Salad',
+            duration: 60,
+            repeat: 'weekdays',
+            active: true
+          },
+          {
+            id: 'alarm_default_2',
+            label: 'Evening Lounge & Focus',
+            time: '19:00',
+            streamUrl: 'https://ice2.somafm.com/secretagent-128-mp3',
+            stationName: 'SomaFM: Secret Agent',
+            duration: 60,
+            repeat: 'daily',
+            active: false
+          }
+        ];
+        saveAlarms();
+      }
+      renderAlarms();
+    }
+
+    function saveAlarms() {
+      localStorage.setItem('aeroradio_alarms', JSON.stringify(alarms));
+    }
+
+    function renderAlarms() {
+      const list = document.getElementById('alarmsList');
+      const emptyState = document.getElementById('emptyAlarmsState');
+      const badge = document.getElementById('alarmCountBadge');
+      list.innerHTML = '';
+
+      badge.textContent = `${alarms.length} ${alarms.length === 1 ? 'alarm' : 'alarms'}`;
+
+      if (alarms.length === 0) {
+        emptyState.classList.remove('hidden');
+        emptyState.classList.add('flex');
+        updateNextAlarmDisplay();
+        return;
+      } else {
+        emptyState.classList.add('hidden');
+        emptyState.classList.remove('flex');
+      }
+
+      alarms.forEach(alarm => {
+        const card = document.createElement('div');
+        card.className = `p-4 rounded-xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+          alarm.active 
+            ? 'bg-slate-900/90 border-slate-700/80 shadow-md' 
+            : 'bg-slate-900/40 border-slate-800/60 opacity-60'
+        }`;
+
+        // Format 12-hour display for card
+        const [h, m] = alarm.time.split(':');
+        const hourNum = parseInt(h, 10);
+        const ampm = hourNum >= 12 ? 'PM' : 'AM';
+        const formatted12h = `${hourNum % 12 || 12}:${m} ${ampm}`;
+
+        const repeatBadge = {
+          'once': 'Once',
+          'daily': 'Everyday',
+          'weekdays': 'Mon-Fri',
+          'weekends': 'Sat-Sun'
+        }[alarm.repeat] || 'Once';
+
+        const stationDisplay = alarm.stationName || stationNames[alarm.streamUrl] || 'Custom Stream';
+
+        card.innerHTML = `
+          <div class="flex items-start space-x-3.5">
+            <div class="w-10 h-10 rounded-lg ${alarm.active ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' : 'bg-slate-800 text-slate-500'} flex items-center justify-center font-mono font-bold text-sm shrink-0">
+              <i data-lucide="radio" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xl font-mono font-bold text-white">${formatted12h}</span>
+                <span class="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300 font-medium">
+                  ${repeatBadge}
+                </span>
+                <span class="text-[11px] px-2 py-0.5 rounded-md bg-cyan-950/60 border border-cyan-800/50 text-cyan-300 font-medium">
+                  ${alarm.duration}m
+                </span>
+              </div>
+              <h4 class="text-sm font-semibold text-slate-200 mt-0.5">${alarm.label}</h4>
+              <p class="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                <i data-lucide="music-2" class="w-3 h-3 text-cyan-400"></i>
+                <span class="truncate max-w-[200px] sm:max-w-[260px]">${stationDisplay}</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Controls: Active Toggle & Delete -->
+          <div class="flex items-center justify-end space-x-3 self-end sm:self-center">
+            <!-- Toggle Active -->
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" ${alarm.active ? 'checked' : ''} onchange="toggleAlarmActive('${alarm.id}')" class="sr-only peer">
+              <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+            </label>
+
+            <!-- Test / Preview Station -->
+            <button onclick="previewStation('${alarm.streamUrl}')" title="Preview Station" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-400 transition">
+              <i data-lucide="play" class="w-4 h-4"></i>
+            </button>
+
+            <!-- Delete Button -->
+            <button onclick="deleteAlarm('${alarm.id}')" title="Delete Alarm" class="p-2 rounded-lg bg-slate-800 hover:bg-rose-900/30 text-slate-400 hover:text-rose-400 transition">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+
+      lucide.createIcons();
+      updateNextAlarmDisplay();
+    }
+
+    window.toggleAlarmActive = function(id) {
+      const alarm = alarms.find(a => a.id === id);
+      if (alarm) {
+        alarm.active = !alarm.active;
+        saveAlarms();
+        renderAlarms();
+        showToast(`Alarm "${alarm.label}" ${alarm.active ? 'activated' : 'deactivated'}.`);
+      }
+    };
+
+    window.deleteAlarm = function(id) {
+      alarms = alarms.filter(a => a.id !== id);
+      saveAlarms();
+      renderAlarms();
+      showToast('Alarm removed.');
+    };
+
+    window.previewStation = function(url) {
+      initAudioContext();
+      if (!audioElement.paused && audioElement.src === url) {
+        audioElement.pause();
+        showToast('Stream preview stopped.');
+      } else {
+        armAudioEngine(true);
+        audioElement.pause();
+        audioElement.src = url;
+        audioElement.volume = 0.5;
+        audioElement.play().then(() => {
+          showToast('Testing live stream connection...');
+        }).catch(err => {
+          showToast('Could not play stream preview. Check URL or network.', 'error');
+        });
+      }
+    };
+
+    function triggerAlarm(alarm) {
+      activeAlarmId = alarm.id;
+      activeAlarmDurationTotal = (alarm.duration || 60) * 60;
+      activeAlarmSecondsRemaining = activeAlarmDurationTotal;
+
+      // Update UI Banner
+      const banner = document.getElementById('activeAlarmBanner');
+      document.getElementById('activeAlarmTitle').textContent = alarm.label;
+      document.getElementById('activeStationInfo').querySelector('span').textContent = 
+        `Streaming: ${alarm.stationName || 'Custom Stream'}`;
+      banner.classList.remove('hidden');
+
+      // Play Stream & Ramp Audio
+      playRadioStream(alarm.streamUrl, alarm.duration || 60);
+
+      // Trigger Desktop Notification if permitted
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("⏰ ALARM RINGING: " + alarm.label, {
+          body: `Now streaming ${alarm.stationName || 'live radio'} for ${alarm.duration || 60} mins uninterrupted.`,
+          icon: "https://placehold.co/128x128/06b6d4/ffffff?text=Alarm"
+        });
+      }
+
+      // If alarm is set to 'once', turn it inactive after firing
+      if (alarm.repeat === 'once') {
+        alarm.active = false;
+        saveAlarms();
+        renderAlarms();
+      }
+
+      // Countdown interval for auto-shutoff after duration (e.g. 1 hour)
+      if (activeAlarmTimer) clearInterval(activeAlarmTimer);
+      activeAlarmTimer = setInterval(() => {
+        activeAlarmSecondsRemaining--;
+
+        const mins = Math.floor(activeAlarmSecondsRemaining / 60);
+        const secs = activeAlarmSecondsRemaining % 60;
+        document.getElementById('radioCountdown').textContent = 
+          `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+        const percentage = (activeAlarmSecondsRemaining / activeAlarmDurationTotal) * 100;
+        document.getElementById('alarmDurationBar').style.width = `${percentage}%`;
+
+        if (activeAlarmSecondsRemaining <= 0) {
+          // Exactly duration expired
+          stopActiveAlarmRadio();
+          showToast(`1-Hour scheduled broadcast ended. Radio shut off automatically.`);
+        }
+      }, 1000);
+    }
+
+    function snoozeCurrentAlarm(minutes) {
+      if (!activeAlarmId) return;
+      stopActiveAlarmRadio();
+
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + minutes);
+      const snoozeH = String(now.getHours()).padStart(2, '0');
+      const snoozeM = String(now.getMinutes()).padStart(2, '0');
+      const snoozedTime = `${snoozeH}:${snoozeM}`;
+
+      const snoozedAlarm = {
+        id: 'snooze_' + Date.now(),
+        label: `Snoozed (+${minutes}m)`,
+        time: snoozedTime,
+        streamUrl: 'https://ice2.somafm.com/groovesalad-128-mp3',
+        stationName: 'SomaFM: Groove Salad',
+        duration: 60,
+        repeat: 'once',
+        active: true
+      };
+
+      alarms.push(snoozedAlarm);
+      saveAlarms();
+      renderAlarms();
+      showToast(`Alarm snoozed for ${minutes} minutes (rings at ${snoozedTime}).`);
+    }
+
+    let lastCheckedMinute = -1;
+
+    function tickClock() {
+      const now = new Date();
+      let hours = now.getHours();
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+
+      // 12-hour representation
+      const displayHours = String(hours % 12 || 12).padStart(2, '0');
+
+      document.getElementById('clockHours').textContent = displayHours;
+      document.getElementById('clockMinutes').textContent = minutes;
+      document.getElementById('clockSeconds').textContent = seconds;
+      document.getElementById('clockAmPm').textContent = ampm;
+
+      // Update Full Date string
+      const dateOptions = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+      document.getElementById('liveDate').textContent = now.toLocaleDateString(undefined, dateOptions);
+
+      // Check alarms on the 00 second of every minute
+      const currentMinuteStamp = now.getHours() * 60 + now.getMinutes();
+      if (now.getSeconds() === 0 && lastCheckedMinute !== currentMinuteStamp) {
+        lastCheckedMinute = currentMinuteStamp;
+        evaluateAlarmTriggers(now);
+      }
+    }
+
+    function evaluateAlarmTriggers(now) {
+      const currentH = String(now.getHours()).padStart(2, '0');
+      const currentM = String(now.getMinutes()).padStart(2, '0');
+      const currentTimeString = `${currentH}:${currentM}`;
+      const dayOfWeek = now.getDay(); // 0 is Sun, 6 is Sat
+
+      alarms.forEach(alarm => {
+        if (!alarm.active) return;
+        if (alarm.time === currentTimeString) {
+          let shouldTrigger = false;
+          if (alarm.repeat === 'once' || alarm.repeat === 'daily') {
+            shouldTrigger = true;
+          } else if (alarm.repeat === 'weekdays' && dayOfWeek >= 1 && dayOfWeek <= 5) {
+            shouldTrigger = true;
+          } else if (alarm.repeat === 'weekends' && (dayOfWeek === 0 || dayOfWeek === 6)) {
+            shouldTrigger = true;
+          }
+
+          if (shouldTrigger && activeAlarmId !== alarm.id) {
+            triggerAlarm(alarm);
+          }
+        }
+      });
+    }
+
+    function updateNextAlarmDisplay() {
+      const summaryEl = document.getElementById('nextAlarmSummary');
+      const activeAlarms = alarms.filter(a => a.active);
+
+      if (activeAlarms.length === 0) {
+        summaryEl.textContent = 'No active alarms scheduled';
+        return;
+      }
+
+      const now = new Date();
+      let earliestTime = null;
+      let earliestAlarm = null;
+
+      activeAlarms.forEach(alarm => {
+        const [ah, am] = alarm.time.split(':').map(Number);
+        // Find next occurrence within next 7 days based on repeat rule
+        for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
+          const testDate = new Date(now);
+          testDate.setDate(now.getDate() + dayOffset);
+          testDate.setHours(ah, am, 0, 0);
+
+          if (testDate > now) {
+            const dow = testDate.getDay();
+            let matches = false;
+            if (alarm.repeat === 'once' || alarm.repeat === 'daily') matches = true;
+            else if (alarm.repeat === 'weekdays' && dow >= 1 && dow <= 5) matches = true;
+            else if (alarm.repeat === 'weekends' && (dow === 0 || dow === 6)) matches = true;
+
+            if (matches) {
+              if (!earliestTime || testDate < earliestTime) {
+                earliestTime = testDate;
+                earliestAlarm = alarm;
+              }
+              break;
+            }
+          }
+        }
+      });
+
+      if (earliestTime && earliestAlarm) {
+        const diffMs = earliestTime - now;
+        const totalMinutes = Math.floor(diffMs / (1000 * 60));
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+
+        let timeRemainingStr = '';
+        if (hours > 0) timeRemainingStr += `${hours} hr${hours > 1 ? 's' : ''} `;
+        timeRemainingStr += `${mins} min${mins !== 1 ? 's' : ''}`;
+
+        summaryEl.innerHTML = `Next alarm: <b class="text-cyan-300">${earliestAlarm.label}</b> in ${timeRemainingStr} (${earliestAlarm.time})`;
+      } else {
+        summaryEl.textContent = 'No upcoming alarms within next 7 days';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadAlarms();
+      tickClock();
+      setInterval(tickClock, 1000);
+      setInterval(updateNextAlarmDisplay, 30000); // refresh relative duration text periodically
+
+      // Custom Stream select toggling
+      const stationSelect = document.getElementById('stationSelect');
+      const customUrlContainer = document.getElementById('customUrlContainer');
+      stationSelect.addEventListener('change', () => {
+        if (stationSelect.value === 'custom') {
+          customUrlContainer.classList.remove('hidden');
+        } else {
+          customUrlContainer.classList.add('hidden');
+        }
+      });
+
+      // Form submission
+      const form = document.getElementById('alarmForm');
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        armAudioEngine(true);
+
+        const timeVal = document.getElementById('alarmTime').value;
+        const labelVal = document.getElementById('alarmLabel').value.trim() || 'Radio Wakeup';
+        const durationVal = parseInt(document.getElementById('playDuration').value, 10) || 60;
+        const repeatVal = document.getElementById('repeatPattern').value;
+
+        let selectedStream = stationSelect.value;
+        let selectedStationName = stationNames[selectedStream] || 'Custom Stream';
+
+        if (selectedStream === 'custom') {
+          const customInput = document.getElementById('customUrlInput').value.trim();
+          if (!customInput) {
+            showToast('Please specify a custom stream HTTPS URL.', 'error');
+            return;
+          }
+          selectedStream = customInput;
+          selectedStationName = 'Custom Stream';
+        }
+
+        const newAlarm = {
+          id: 'alarm_' + Date.now(),
+          label: labelVal,
+          time: timeVal,
+          streamUrl: selectedStream,
+          stationName: selectedStationName,
+          duration: durationVal,
+          repeat: repeatVal,
+          active: true
+        };
+
+        alarms.push(newAlarm);
+        saveAlarms();
+        renderAlarms();
+        form.reset();
+        stationSelect.value = 'https://ice2.somafm.com/groovesalad-128-mp3';
+        customUrlContainer.classList.add('hidden');
+        document.getElementById('playDuration').value = 60;
+
+        showToast(`Alarm set for ${timeVal} (${labelVal})`);
+      });
+
+      // Arm Engine Button
+      document.getElementById('armEngineBtn').addEventListener('click', () => {
+        armAudioEngine();
+      });
+
+      // Test Audio Button
+      document.getElementById('testAudioBtn').addEventListener('click', () => {
+        initAudioContext();
+        armAudioEngine(true);
+        if (!audioElement.paused) {
+          audioElement.pause();
+          showToast('Audio test stopped.');
+        } else {
+          audioElement.src = 'https://ice2.somafm.com/groovesalad-128-mp3';
+          audioElement.volume = 0.5;
+          audioElement.play().then(() => {
+            showToast('Streaming test active: SomaFM Groove Salad');
+          }).catch(err => {
+            showToast('Playback error: please check sound output settings.', 'error');
+          });
+        }
+      });
+
+      // Desktop Notification Permission Request
+      document.getElementById('notifyBtn').addEventListener('click', () => {
+        if ("Notification" in window) {
+          Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+              showToast('Notifications enabled for alarm rings!');
+            } else {
+              showToast('Notification access was declined.', 'error');
+            }
+          });
+        } else {
+          showToast('Notifications are not supported in this browser.', 'error');
+        }
+      });
+
+      // Active Alarm Overlay Buttons
+      document.getElementById('dismissAlarmBtn').addEventListener('click', () => {
+        stopActiveAlarmRadio();
+        showToast('Alarm dismissed.');
+      });
+
+      document.getElementById('snooze5Btn').addEventListener('click', () => {
+        snoozeCurrentAlarm(5);
+      });
+
+      document.getElementById('snooze10Btn').addEventListener('click', () => {
+        snoozeCurrentAlarm(10);
+      });
+
+      // User Interaction on document to auto-arm audio context safely
+      const autoUnlock = () => {
+        armAudioEngine(true);
+        window.removeEventListener('click', autoUnlock);
+        window.removeEventListener('keydown', autoUnlock);
+      };
+      window.addEventListener('click', autoUnlock, { once: true });
+      window.addEventListener('keydown', autoUnlock, { once: true });
+    });
+
+    let toastTimeout = null;
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.textContent = message;
+      if (type === 'error') {
+        toastIcon.innerHTML = `<i data-lucide="alert-circle" class="w-5 h-5 text-rose-400"></i>`;
+      } else if (type === 'success') {
+        toastIcon.innerHTML = `<i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>`;
+      } else {
+        toastIcon.innerHTML = `<i data-lucide="info" class="w-5 h-5 text-cyan-400"></i>`;
+      }
+      lucide.createIcons();
+
+      toast.classList.remove('translate-y-24', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-24', 'opacity-0');
+      }, 4000);
+    }
+  </script>
+</body>
+</html>
